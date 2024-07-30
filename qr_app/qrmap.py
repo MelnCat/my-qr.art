@@ -67,6 +67,16 @@ class QrMap:
         else:
             return bit
 
+    def set_with_mask(self, x, y, value):
+        mask = (y % 2) == 0
+        bit = value
+        if mask:
+            if value == ModuleType.AVAILABLE:
+                bit = ModuleType.BLOCKED
+            else:
+                bit = ModuleType.AVAILABLE
+        self.set(x, y, value);
+
     def to_string(self):
         string = ''
         for y in range(0, self.size):
@@ -318,8 +328,52 @@ def get_raw_qr_data(design, error='L', mode='binary'):
     interleaved_path = interleave_path(
         path, version, error)
 
-    data = ""
 
+    indices = {}
+
+    i = -1
+    j = -1
+    data = ""
+    for (x, y) in interleaved_path:
+        i += 1
+        if qrmap.get(x, y) == ModuleType.AVAILABLE:
+            j += 1
+            indices[j] = i
+            data += ('1'
+                     if design.get_with_mask(x, y) == ModuleType.AVAILABLE
+                     else '0')
+
+    parsed = bitstring_to_alphanumeric(data)
+    def set_nth(n):
+        design.set(interleaved_path[indices[n]][0], interleaved_path[indices[n]][1],
+            ModuleType.BLOCKED if qrmap.get(interleaved_path[indices[n]][0], interleaved_path[indices[n]][1]) == ModuleType.AVAILABLE
+            else ModuleType.AVAILABLE
+        )
+
+    i = 0
+    while i < len(parsed):
+        if i + 1 < len(parsed):
+            if parsed[i] == " ":
+                if parsed[i + 1] == "P":
+                    set_nth((i // 2) * 11 + 1)
+                else:
+                    set_nth((i // 2) * 11)
+            elif parsed[i + 1] == " ":
+                if parsed[i] == "D":
+                    set_nth((i // 2) * 11 + 1)
+                else:
+                    set_nth((i // 2) * 11)
+        else:
+            if parsed[i] == " ":
+                set_nth((i // 2) * 11)
+        i += 2
+
+    path = get_path(qrmap, [ModuleType.AVAILABLE, ModuleType.RESERVED])
+
+    interleaved_path = interleave_path(
+        path, version, error)
+
+    data = ""
     for (x, y) in interleaved_path:
         if qrmap.get(x, y) == ModuleType.AVAILABLE:
             data += ('1'
